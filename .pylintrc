@@ -1,0 +1,28 @@
+[MASTER]
+ignore=.venv,venv,.pdm-build
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    trailing-newlines,
+    trailing-whitespace,
+    too-few-public-methods,
+    invalid-name,
+    missing-function-docstring,
+    missing-final-newline,
+    unexpected-line-ending-format,
+    arguments-renamed
+
+[FORMAT]
+max-line-length=100
+expected-line-ending-format=LF
+
+[BASIC]
+variable-naming-style=camelCase
+argument-naming-style=camelCase
+attr-naming-style=camelCase
+method-naming-style=camelCase
+function-naming-style=camelCase
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+class-attribute-naming-style=UPPER_CASE
