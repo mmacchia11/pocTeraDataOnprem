@@ -11,7 +11,8 @@ disable=
     missing-function-docstring,
     missing-final-newline,
     unexpected-line-ending-format,
-    arguments-renamed
+    arguments-renamed,
+    broad-exception-caught
 
 [FORMAT]
 max-line-length=100
