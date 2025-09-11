@@ -12,12 +12,11 @@ def test_port_accessible() -> None:
     sock.settimeout(5)
     try:
         result = sock.connect_ex(("localhost", 1025))
-        # Port should be accessible (result == 0) or connection refused (container not running)
         assert result in [
             0,
             61,
             111,
-        ]  # 0=success, 61=connection refused (macOS), 111=connection refused (Linux)
+        ]
     finally:
         sock.close()
 
