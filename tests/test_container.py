@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 from src.teradata_onprem.connection import test_connection
 
-
 def test_port_accessible() -> None:
     """Test that Teradata port is accessible."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

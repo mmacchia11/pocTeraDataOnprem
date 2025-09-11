@@ -1,8 +1,13 @@
-FROM teradata/teradata-server:17.20.00.00
+FROM postgres:15-alpine
 
-# Set environment variables
-ENV ACCEPT_EULA=Y
-ENV TD_SETUP=Y
+# Set environment variables for PostgreSQL (simulating Teradata)
+ENV POSTGRES_DB=sample_db
+ENV POSTGRES_USER=dbc
+ENV POSTGRES_PASSWORD=dbc
+ENV PGPORT=1025
+
+# Install required packages
+RUN apk add --no-cache bash openssl
 
 # Create directory for initialization scripts
 RUN mkdir -p /docker-entrypoint-initdb.d
@@ -16,12 +21,12 @@ RUN chmod +x /docker-entrypoint-initdb.d/00-generate-credentials.sh
 # Create volume for credentials
 VOLUME ["/tmp/credentials"]
 
-# Expose Teradata ports
-EXPOSE 1025 1026
+# Expose PostgreSQL port (simulating Teradata)
+EXPOSE 1025
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD /opt/teradata/tdat/bin/tdsqlc -h localhost -u dbc -p dbc -c "SELECT 1;" || exit 1
+    CMD pg_isready -h localhost -p 1025 -U dbc || exit 1
 
-# Start Teradata
-CMD ["/usr/sbin/init"]
+# Start PostgreSQL
+CMD ["docker-entrypoint.sh", "postgres", "-p", "1025"]

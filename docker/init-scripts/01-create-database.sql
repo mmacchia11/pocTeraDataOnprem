@@ -1,27 +1,20 @@
--- Initial database setup for Teradata
+-- Initial database setup (PostgreSQL simulating Teradata)
 -- This script creates a sample database structure
 
-CREATE DATABASE sample_db
-AS PERMANENT = 1000000000,
-   SPOOL = 1000000000;
-
 -- Create admin user with fixed password
-CREATE USER ${ADMIN_USER}
-AS PASSWORD = '${ADMIN_PASS}',
-   PERMANENT = 500000000,
-   SPOOL = 500000000,
-   DEFAULT DATABASE = sample_db;
+CREATE USER admin_user WITH PASSWORD 'root';
 
--- Create application user with generated password
-CREATE USER ${APP_USER}
-AS PASSWORD = '${APP_PASS}',
-   PERMANENT = 100000000,
-   SPOOL = 100000000,
-   DEFAULT DATABASE = sample_db;
+-- Create application user with generated password  
+CREATE USER app_user WITH PASSWORD 'app_pass';
 
 -- Grant permissions
-GRANT ALL ON sample_db TO ${ADMIN_USER};
-GRANT SELECT, INSERT, UPDATE, DELETE ON sample_db TO ${APP_USER};
+GRANT ALL PRIVILEGES ON DATABASE sample_db TO admin_user;
+GRANT CONNECT ON DATABASE sample_db TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL SEQUENCES IN SCHEMA public TO app_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON SEQUENCES TO app_user;
 
 -- Create sample table structure (empty, data will be mounted from other repos)
 DATABASE sample_db;
