@@ -1,243 +1,168 @@
--- Initial database setup for Teradata
--- This script creates a sample database structure
+-- Data Warehouse setup (ClickHouse simulating Teradata DW)
+-- This creates a columnar data warehouse structure
 
-CREATE DATABASE sample_db
-AS PERMANENT = 1000000000,
-   SPOOL = 1000000000;
+-- Create database
+CREATE DATABASE IF NOT EXISTS sample_dw;
 
--- Create admin user with fixed password
-CREATE USER ${ADMIN_USER}
-AS PASSWORD = '${ADMIN_PASS}',
-   PERMANENT = 500000000,
-   SPOOL = 500000000,
-   DEFAULT DATABASE = sample_db;
+-- Use the database
+USE sample_dw;
 
--- Create application user with generated password
-CREATE USER ${APP_USER}
-AS PASSWORD = '${APP_PASS}',
-   PERMANENT = 100000000,
-   SPOOL = 100000000,
-   DEFAULT DATABASE = sample_db;
+-- Dimension Tables (SCD Type 2 for DW)
+CREATE TABLE dim_customers (
+    customer_key UInt64,
+    customer_id UInt32,
+    customer_name String,
+    email String,
+    phone String,
+    address String,
+    city String,
+    state String,
+    country String,
+    postal_code String,
+    customer_type String,
+    credit_limit Decimal(12,2),
+    effective_date Date,
+    expiry_date Date,
+    is_current UInt8,
+    created_date Date
+) ENGINE = MergeTree()
+ORDER BY (customer_key, effective_date);
 
--- Grant permissions
-GRANT ALL ON sample_db TO ${ADMIN_USER};
-GRANT SELECT, INSERT, UPDATE, DELETE ON sample_db TO ${APP_USER};
+CREATE TABLE dim_products (
+    product_key UInt64,
+    product_id UInt32,
+    product_name String,
+    category_id UInt32,
+    category_name String,
+    supplier_id UInt32,
+    supplier_name String,
+    unit_price Decimal(10,2),
+    discontinued UInt8,
+    effective_date Date,
+    expiry_date Date,
+    is_current UInt8
+) ENGINE = MergeTree()
+ORDER BY (product_key, effective_date);
 
--- Create sample table structure (empty, data will be mounted from other repos)
-DATABASE sample_db;
+CREATE TABLE dim_employees (
+    employee_key UInt64,
+    employee_id UInt32,
+    first_name String,
+    last_name String,
+    title String,
+    department_id UInt32,
+    department_name String,
+    manager_id Nullable(UInt32),
+    salary Decimal(10,2),
+    hire_date Date,
+    effective_date Date,
+    expiry_date Date,
+    is_current UInt8
+) ENGINE = MergeTree()
+ORDER BY (employee_key, effective_date);
 
--- Core business entities
-CREATE TABLE customers (
-    customer_id INTEGER NOT NULL,
-    customer_name VARCHAR(100),
-    email VARCHAR(100),
-    phone VARCHAR(20),
-    address VARCHAR(200),
-    city VARCHAR(50),
-    state VARCHAR(50),
-    country VARCHAR(50),
-    postal_code VARCHAR(20),
-    customer_type VARCHAR(20),
-    credit_limit DECIMAL(12,2),
-    created_date DATE,
-    last_updated TIMESTAMP
-) PRIMARY INDEX (customer_id);
+CREATE TABLE dim_date (
+    date_key UInt32,
+    date Date,
+    year UInt16,
+    quarter UInt8,
+    month UInt8,
+    day UInt8,
+    day_of_week UInt8,
+    day_name String,
+    month_name String,
+    is_weekend UInt8,
+    is_holiday UInt8
+) ENGINE = MergeTree()
+ORDER BY date_key;
 
-CREATE TABLE products (
-    product_id INTEGER NOT NULL,
-    product_name VARCHAR(100),
-    category_id INTEGER,
-    supplier_id INTEGER,
-    unit_price DECIMAL(10,2),
-    units_in_stock INTEGER,
-    units_on_order INTEGER,
-    reorder_level INTEGER,
-    discontinued CHAR(1),
-    created_date DATE
-) PRIMARY INDEX (product_id);
+-- Fact Tables (Partitioned by date for DW performance)
+CREATE TABLE fact_sales (
+    sale_key UInt64,
+    date_key UInt32,
+    customer_key UInt64,
+    product_key UInt64,
+    employee_key UInt64,
+    order_id UInt32,
+    quantity UInt32,
+    unit_price Decimal(10,2),
+    discount Decimal(4,2),
+    net_amount Decimal(12,2),
+    gross_amount Decimal(12,2),
+    cost_amount Decimal(12,2),
+    profit_amount Decimal(12,2),
+    sale_date Date,
+    created_timestamp DateTime
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(sale_date)
+ORDER BY (date_key, customer_key, product_key);
 
-CREATE TABLE categories (
-    category_id INTEGER NOT NULL,
-    category_name VARCHAR(50),
-    description VARCHAR(200)
-) PRIMARY INDEX (category_id);
+CREATE TABLE fact_inventory (
+    inventory_key UInt64,
+    date_key UInt32,
+    product_key UInt64,
+    movement_type String,
+    quantity_in UInt32,
+    quantity_out UInt32,
+    quantity_balance UInt32,
+    unit_cost Decimal(10,2),
+    total_value Decimal(12,2),
+    movement_date Date,
+    created_timestamp DateTime
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(movement_date)
+ORDER BY (date_key, product_key);
 
-CREATE TABLE suppliers (
-    supplier_id INTEGER NOT NULL,
-    supplier_name VARCHAR(100),
-    contact_name VARCHAR(50),
-    contact_title VARCHAR(50),
-    address VARCHAR(200),
-    city VARCHAR(50),
-    region VARCHAR(50),
-    postal_code VARCHAR(20),
-    country VARCHAR(50),
-    phone VARCHAR(20),
-    email VARCHAR(100)
-) PRIMARY INDEX (supplier_id);
+-- Aggregate Tables (Pre-calculated for DW performance)
+CREATE TABLE agg_sales_monthly (
+    year_month UInt32,
+    customer_key UInt64,
+    product_key UInt64,
+    total_sales Decimal(15,2),
+    total_quantity UInt64,
+    total_orders UInt32,
+    avg_order_value Decimal(10,2),
+    total_profit Decimal(15,2),
+    created_date Date
+) ENGINE = SummingMergeTree()
+PARTITION BY toYear(created_date)
+ORDER BY (year_month, customer_key, product_key);
 
--- Transactional tables
-CREATE TABLE orders (
-    order_id INTEGER NOT NULL,
-    customer_id INTEGER,
-    employee_id INTEGER,
-    order_date DATE,
-    required_date DATE,
-    shipped_date DATE,
-    ship_via INTEGER,
-    freight DECIMAL(10,2),
-    ship_name VARCHAR(100),
-    ship_address VARCHAR(200),
-    ship_city VARCHAR(50),
-    ship_region VARCHAR(50),
-    ship_postal_code VARCHAR(20),
-    ship_country VARCHAR(50),
-    order_status VARCHAR(20),
-    total_amount DECIMAL(12,2)
-) PRIMARY INDEX (order_id);
+CREATE TABLE agg_sales_daily (
+    date_key UInt32,
+    total_sales Decimal(15,2),
+    total_orders UInt32,
+    total_customers UInt32,
+    avg_order_value Decimal(10,2),
+    created_timestamp DateTime
+) ENGINE = ReplacingMergeTree()
+ORDER BY date_key;
 
-CREATE TABLE order_details (
-    order_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
-    unit_price DECIMAL(10,2),
-    quantity INTEGER,
-    discount DECIMAL(4,2)
-) PRIMARY INDEX (order_id, product_id);
+-- Customer Analytics (DW specific tables)
+CREATE TABLE customer_lifetime_value (
+    customer_key UInt64,
+    first_purchase_date Date,
+    last_purchase_date Date,
+    total_orders UInt32,
+    total_spent Decimal(15,2),
+    avg_order_value Decimal(10,2),
+    customer_segment String,
+    ltv_score Decimal(8,2),
+    calculated_date Date
+) ENGINE = ReplacingMergeTree()
+ORDER BY customer_key;
 
--- Employee and organizational structure
-CREATE TABLE employees (
-    employee_id INTEGER NOT NULL,
-    last_name VARCHAR(50),
-    first_name VARCHAR(50),
-    title VARCHAR(50),
-    title_of_courtesy VARCHAR(10),
-    birth_date DATE,
-    hire_date DATE,
-    address VARCHAR(200),
-    city VARCHAR(50),
-    region VARCHAR(50),
-    postal_code VARCHAR(20),
-    country VARCHAR(50),
-    home_phone VARCHAR(20),
-    extension VARCHAR(10),
-    reports_to INTEGER,
-    salary DECIMAL(10,2),
-    department_id INTEGER
-) PRIMARY INDEX (employee_id);
-
-CREATE TABLE departments (
-    department_id INTEGER NOT NULL,
-    department_name VARCHAR(50),
-    manager_id INTEGER,
-    budget DECIMAL(12,2),
-    location VARCHAR(100)
-) PRIMARY INDEX (department_id);
-
--- Shipping and logistics
-CREATE TABLE shippers (
-    shipper_id INTEGER NOT NULL,
-    company_name VARCHAR(100),
-    phone VARCHAR(20),
-    email VARCHAR(100)
-) PRIMARY INDEX (shipper_id);
-
--- Financial and analytical tables
-CREATE TABLE sales_summary (
-    summary_id INTEGER NOT NULL,
-    year_month INTEGER,
-    customer_id INTEGER,
-    product_id INTEGER,
-    category_id INTEGER,
-    total_sales DECIMAL(15,2),
-    total_quantity INTEGER,
-    total_orders INTEGER,
-    avg_order_value DECIMAL(10,2)
-) PRIMARY INDEX (summary_id);
-
-CREATE TABLE inventory_movements (
-    movement_id INTEGER NOT NULL,
-    product_id INTEGER,
-    movement_type VARCHAR(20),
-    quantity INTEGER,
-    unit_cost DECIMAL(10,2),
-    movement_date DATE,
-    reference_id INTEGER,
-    notes VARCHAR(200)
-) PRIMARY INDEX (movement_id);
-
--- Customer relationship management
-CREATE TABLE customer_interactions (
-    interaction_id INTEGER NOT NULL,
-    customer_id INTEGER,
-    employee_id INTEGER,
-    interaction_type VARCHAR(30),
-    interaction_date TIMESTAMP,
-    subject VARCHAR(100),
-    notes VARCHAR(500),
-    follow_up_date DATE
-) PRIMARY INDEX (interaction_id);
-
--- Foreign Key relationships (Teradata uses REFERENCES for documentation)
--- Products -> Categories
-ALTER TABLE products ADD CONSTRAINT fk_products_category 
-    FOREIGN KEY (category_id) REFERENCES categories(category_id);
-
--- Products -> Suppliers  
-ALTER TABLE products ADD CONSTRAINT fk_products_supplier
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id);
-
--- Orders -> Customers
-ALTER TABLE orders ADD CONSTRAINT fk_orders_customer
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id);
-
--- Orders -> Employees
-ALTER TABLE orders ADD CONSTRAINT fk_orders_employee
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id);
-
--- Orders -> Shippers
-ALTER TABLE orders ADD CONSTRAINT fk_orders_shipper
-    FOREIGN KEY (ship_via) REFERENCES shippers(shipper_id);
-
--- Order Details -> Orders
-ALTER TABLE order_details ADD CONSTRAINT fk_order_details_order
-    FOREIGN KEY (order_id) REFERENCES orders(order_id);
-
--- Order Details -> Products
-ALTER TABLE order_details ADD CONSTRAINT fk_order_details_product
-    FOREIGN KEY (product_id) REFERENCES products(product_id);
-
--- Employees -> Employees (self-reference for manager)
-ALTER TABLE employees ADD CONSTRAINT fk_employees_manager
-    FOREIGN KEY (reports_to) REFERENCES employees(employee_id);
-
--- Employees -> Departments
-ALTER TABLE employees ADD CONSTRAINT fk_employees_department
-    FOREIGN KEY (department_id) REFERENCES departments(department_id);
-
--- Departments -> Employees (manager)
-ALTER TABLE departments ADD CONSTRAINT fk_departments_manager
-    FOREIGN KEY (manager_id) REFERENCES employees(employee_id);
-
--- Sales Summary -> Customers
-ALTER TABLE sales_summary ADD CONSTRAINT fk_sales_summary_customer
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id);
-
--- Sales Summary -> Products
-ALTER TABLE sales_summary ADD CONSTRAINT fk_sales_summary_product
-    FOREIGN KEY (product_id) REFERENCES products(product_id);
-
--- Sales Summary -> Categories
-ALTER TABLE sales_summary ADD CONSTRAINT fk_sales_summary_category
-    FOREIGN KEY (category_id) REFERENCES categories(category_id);
-
--- Inventory Movements -> Products
-ALTER TABLE inventory_movements ADD CONSTRAINT fk_inventory_movements_product
-    FOREIGN KEY (product_id) REFERENCES products(product_id);
-
--- Customer Interactions -> Customers
-ALTER TABLE customer_interactions ADD CONSTRAINT fk_customer_interactions_customer
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id);
-
--- Customer Interactions -> Employees
-ALTER TABLE customer_interactions ADD CONSTRAINT fk_customer_interactions_employee
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id);
+-- Product Performance (DW Analytics)
+CREATE TABLE product_performance (
+    product_key UInt64,
+    year_month UInt32,
+    units_sold UInt64,
+    revenue Decimal(15,2),
+    profit Decimal(15,2),
+    profit_margin Decimal(5,4),
+    rank_by_revenue UInt32,
+    rank_by_profit UInt32,
+    calculated_date Date
+) ENGINE = ReplacingMergeTree()
+PARTITION BY toYear(calculated_date)
+ORDER BY (year_month, product_key);

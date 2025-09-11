@@ -6,7 +6,7 @@ authors = [
     {name = "Martin", email = "martin@example.com"},
 ]
 dependencies = [
-    "teradatasql>=17.20.0.28",
+    "clickhouse-connect>=0.6.0",
     "pytest>=7.4.0",
     "requests>=2.31.0",
 ]
@@ -20,6 +20,7 @@ dev = [
     "pylint>=3.0.0",
     "mypy>=1.5.0",
     "pytest-cov>=4.1.0",
+    "types-requests>=2.31.0",
 ]
 
 [build-system]
@@ -35,6 +36,7 @@ dev = [
     "pylint>=3.0.0",
     "mypy>=1.5.0",
     "pytest-cov>=4.1.0",
+    "types-requests>=2.31.0",
 ]
 
 [tool.ruff]

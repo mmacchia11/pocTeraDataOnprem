@@ -1,15 +1,15 @@
 # pocTeraDataOnprem
 
-Simulación de Teradata on-premise usando Docker para pruebas e integraciones con AWS.
+Simulación de Data Warehouse (ClickHouse) on-premise usando Docker para pruebas e integraciones con AWS.
 
 ## Descripción
 
-Este repositorio proporciona un contenedor Docker que simula un entorno Teradata on-premise, diseñado para:
+Este repositorio proporciona un contenedor Docker que simula un Data Warehouse ClickHouse on-premise, diseñado para:
 
 - Pruebas de integraciones con servicios AWS (Glue, DMS, Redshift, Athena)
-- Desarrollo de pipelines de datos
-- Simulación de Data Warehouse on-premise
-- Testing de conectividad y queries
+- Desarrollo de pipelines de datos analíticos
+- Simulación de Data Warehouse columnar on-premise
+- Testing de queries OLAP y conectividad
 
 ## Estructura del Proyecto
 
@@ -53,10 +53,11 @@ make run
 
 ### Credenciales Dinámicas
 - **Host**: localhost
-- **Puerto**: 1025
-- **Usuario Root**: `root` (password generado automáticamente)
+- **Puerto HTTP**: 1025
+- **Puerto TCP**: 1026
+- **Usuario Admin**: `admin` / `root` (fijas)
 - **Usuario App**: `app_user` (password generado automáticamente)
-- **Base de datos**: sample_db
+- **Base de datos**: sample_dw
 
 > ⚠️ **Importante**: Las credenciales se generan automáticamente al iniciar el contenedor. Ver [CREDENTIALS.md](CREDENTIALS.md) para detalles completos.
 
@@ -70,18 +71,18 @@ docker run -d --name teradata-onprem \
   ghcr.io/tu-usuario/poc-teradata-onprem:latest
 
 # Leer credenciales generadas
-cat credentials/teradata_credentials.txt
+cat credentials/clickhouse_credentials.txt
 ```
 
 ### Usando Python
 
 ```python
-from src.teradata_onprem.connection import get_connection
+from src.teradata_onprem.connection import execute_query
 
 # Cargar credenciales dinámicas
 def load_credentials():
     creds = {}
-    with open('./credentials/teradata_credentials.txt', 'r') as f:
+    with open('./credentials/clickhouse_credentials.txt', 'r') as f:
         for line in f:
             if '=' in line and not line.startswith('#'):
                 key, value = line.strip().split('=', 1)
@@ -90,25 +91,43 @@ def load_credentials():
 
 creds = load_credentials()
 
-# Conectar con credenciales dinámicas
-with get_connection(
-    user=creds['APP_USER'], 
+# Ejecutar queries analíticas en ClickHouse
+result = execute_query(
+    "SELECT customer_key, customer_name FROM dim_customers WHERE is_current = 1 LIMIT 10",
+    user=creds['APP_USER'],
     password=creds['APP_PASS']
-) as conn:
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM sample_db.customers LIMIT 10")
-        results = cur.fetchall()
-        print(results)
+)
+print(result['data'])
+
+# Query analítica de ejemplo
+sales_query = """
+SELECT 
+    toYYYYMM(sale_date) as month,
+    sum(net_amount) as total_sales,
+    count(DISTINCT customer_key) as customers
+FROM fact_sales 
+WHERE sale_date >= '2024-01-01'
+GROUP BY month
+ORDER BY month
+"""
+result = execute_query(sales_query, user=creds['APP_USER'], password=creds['APP_PASS'])
+print(result['data'])
 ```
 
 ### Usando cliente CLI
 
 ```bash
-# Instalar cliente Teradata
-pip install teradatasql
+# Instalar cliente ClickHouse
+pip install clickhouse-connect
 
 # Conectar desde línea de comandos
+clickhouse-client --host localhost --port 1026 --user app_user --password <generated_pass>
+
+# Test de conectividad
 python -c "from src.teradata_onprem.connection import test_connection; print('Connected:', test_connection())"
+
+# Query de ejemplo
+clickhouse-client --host localhost --port 1026 --query "SELECT count() FROM dim_customers"
 ```
 
 ## Montaje de Datasets

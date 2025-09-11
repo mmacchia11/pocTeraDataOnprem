@@ -8,7 +8,7 @@ format:
 	pdm run ruff format .
 
 # Verificación de calidad completa
-quality:
+quality: install
 	pdm run ruff check .
 	pdm run ruff format --check .
 	pdm run pylint src
@@ -29,7 +29,7 @@ push:
 
 # Instalar dependencias
 install:
-	pdm install
+	pdm install --dev
 
 # Ejecutar tests
 test:

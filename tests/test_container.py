@@ -1,4 +1,4 @@
-"""Test Teradata container functionality."""
+"""Test ClickHouse Data Warehouse container functionality."""
 
 import socket
 from unittest.mock import patch
@@ -7,7 +7,7 @@ from src.teradata_onprem.connection import test_connection
 
 
 def test_port_accessible() -> None:
-    """Test that Teradata port is accessible."""
+    """Test that ClickHouse port is accessible."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5)
     try:
@@ -22,10 +22,11 @@ def test_port_accessible() -> None:
         sock.close()
 
 
-@patch("src.teradata_onprem.connection.teradatasql.connect")
-def test_connection_mock(mock_connect) -> None:
-    """Test connection with mocked Teradata."""
-    mock_connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.execute.return_value = None
+@patch("src.teradata_onprem.connection.requests.post")
+def test_connection_mock(mock_post) -> None:
+    """Test connection with mocked ClickHouse."""
+    mock_post.return_value.status_code = 200
+    mock_post.return_value.text = "1"
 
     result = test_connection()
     assert isinstance(result, bool)
